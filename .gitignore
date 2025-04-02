@@ -1,24 +1,70 @@
-# Compiled class file
+# Java / Maven
 *.class
-
-# Log file
-*.log
-
-# BlueJ files
-*.ctxt
-
-# Mobile Tools for Java (J2ME)
-.mtj.tmp/
-
-# Package Files #
 *.jar
 *.war
-*.nar
 *.ear
-*.zip
-*.tar.gz
-*.rar
+*.iml
+*.hprof
 
-# virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
-hs_err_pid*
-replay_pid*
+/target/
+/bin/
+/build/
+
+.mvn/
+!**/mvn/wrapper/maven-wrapper.jar
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+
+# Gradle
+.gradle/
+!gradle/wrapper/gradle-wrapper.jar
+
+# IDEs / Tools
+.idea/
+*.iws
+*.ipr
+out/
+.vscode/
+
+# Logs
+*.log
+*.log.*
+
+# SQLite DB
+/*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# Uncomment if you want to keep the file
+# !backend/login.db
+
+# OS-generated
+.DS_Store
+Thumbs.db
+
+# Node / React / Vite
+node_modules/
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.vite/
+.parcel-cache/
+.turbo/
+.env
+.env.*              # allow dev/prod/test variants
+
+# Frontend build outputs
+/frontend/dist/
+/frontend/build/
+
+# Vite preview cache
+/frontend/.vite/
+
+# Lockfiles
+yarn.lock
+pnpm-lock.yaml
