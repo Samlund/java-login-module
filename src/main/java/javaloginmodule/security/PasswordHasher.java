@@ -1,7 +1,6 @@
 package javaloginmodule.security;
 
-import org.springframework.stereotype.Component;
-
-@Component
-public class PasswordHasher {
+public interface PasswordHasher {
+    String hash(String password);
+    boolean verify(String password, String hash);
 }
