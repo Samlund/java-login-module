@@ -91,4 +91,22 @@ public class UserRepository {
             return Optional.empty();
         }
     }
+
+    public Optional<User> fetchById(int id) {
+        String sql = "SELECT * FROM users WHERE id = ?";
+        try {
+            User user = jdbcTemplate.queryForObject(
+                    sql,
+                    (rs, rowNum) -> new User(
+                            rs.getInt("id"),
+                            rs.getString("username"),
+                            rs.getString("password")
+                    ),
+                    id
+            );
+            return Optional.of(user);
+        } catch (EmptyResultDataAccessException e) {
+            return Optional.empty();
+        }
+    }
 }

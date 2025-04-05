@@ -3,6 +3,7 @@ package javaloginmodule.service;
 import javaloginmodule.model.AuthRequest;
 import javaloginmodule.model.AuthResponse;
 import javaloginmodule.model.User;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,8 +15,7 @@ import org.springframework.test.context.ActiveProfiles;
 
 import java.util.Optional;
 
-import static org.junit.jupiter.api.Assertions.assertAll;
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.springframework.test.util.AssertionErrors.assertFalse;
 import static org.springframework.test.util.AssertionErrors.assertTrue;
 
@@ -25,19 +25,23 @@ public class AuthServiceTest {
 
     private final UserRepository repository;
     private final PasswordHasher passwordHasher;
+    private final TokenService tokenService;
     private final JdbcTemplate jdbcTemplate;
     private AuthService service;
+    @Autowired
+    private UserRepository userRepository;
 
     @Autowired
-    public AuthServiceTest(UserRepository repository, PasswordHasher passwordHasher, JdbcTemplate jdbcTemplate) {
+    public AuthServiceTest(UserRepository repository, PasswordHasher passwordHasher, TokenService tokenService, JdbcTemplate jdbcTemplate) {
         this.repository = repository;
         this.passwordHasher = passwordHasher;
+        this.tokenService = tokenService;
         this.jdbcTemplate = jdbcTemplate;
     }
 
     @BeforeEach
     public void setUp() {
-        service = new AuthService(repository, passwordHasher);
+        service = new AuthService(repository, passwordHasher, tokenService);
         jdbcTemplate.execute("DELETE FROM users");
     }
 
@@ -45,13 +49,13 @@ public class AuthServiceTest {
     public void register_returnAuthResponse_ifUserDoesNotExist() {
         String username = "sam";
         String password = "password123";
-        AuthRequest authRequest = new AuthRequest(username, password);
+        AuthRequest request = AuthRequest.withoutToken(username, password);
 
-        Optional<AuthResponse> authResponse = service.register(authRequest);
+        Optional<AuthResponse> registration = service.register(request);
 
         assertAll(
-                () -> assertTrue("Could not register user: " + username, authResponse.isPresent()),
-                () -> assertEquals(username, authResponse.get().username())
+                () -> assertTrue("Could not register user: " + username, registration.isPresent()),
+                () -> assertEquals(username, registration.get().username())
         );
     }
 
@@ -59,17 +63,17 @@ public class AuthServiceTest {
     public void register_returnEmptyAuthResponse_ifUserAlreadyExists() {
         String username = "sam";
         String password = "password123";
-        AuthRequest authRequest = new AuthRequest(username, password);
+        AuthRequest request = AuthRequest.withoutToken(username, password);
 
-        Optional<AuthResponse> authResponse = service.register(authRequest);
+        Optional<AuthResponse> registration = service.register(request);
 
         password = "anotherPassword123";
-        authRequest = new AuthRequest(username, password);
-        Optional<AuthResponse> duplicateAuthResponse = service.register(authRequest);
+        request = AuthRequest.withoutToken(username, password);
+        Optional<AuthResponse> duplicateRegistration = service.register(request);
 
         assertAll(
-                () -> assertTrue("Failed to create user", authResponse.isPresent()),
-                () -> assertTrue("Expected response to be empty", duplicateAuthResponse.isEmpty())
+                () -> assertTrue("Failed to create user", registration.isPresent()),
+                () -> assertTrue("Expected response to be empty", duplicateRegistration.isEmpty())
         );
     }
 
@@ -77,14 +81,14 @@ public class AuthServiceTest {
     public void authenticate_returnAuthResponse_ifValidCredentials() {
         String username = "sam";
         String password = "password123";
-        AuthRequest authRequest = new AuthRequest(username, password);
+        AuthRequest request = AuthRequest.withoutToken(username, password);
 
-        Optional<AuthResponse> registrationResponse = service.register(authRequest);
-        Optional<AuthResponse> authenticatedResponse = service.authenticate(authRequest);
+        Optional<AuthResponse> registration = service.register(request);
+        Optional<AuthResponse> authentication = service.authenticate(request);
 
         assertAll(
-                () -> assertTrue("Could not mock user", registrationResponse.isPresent()),
-                () -> assertTrue("Failed to authenticate user", authenticatedResponse.isPresent())
+                () -> assertTrue("Could not mock user", registration.isPresent()),
+                () -> assertTrue("Failed to authenticate user", authentication.isPresent())
         );
     }
 
@@ -92,17 +96,17 @@ public class AuthServiceTest {
     public void authenticate_returnEmpty_ifInvalidCredentials() {
         String username = "sam";
         String password = "password123";
-        AuthRequest authRequest = new AuthRequest(username, password);
+        AuthRequest request = AuthRequest.withoutToken(username, password);
 
-        Optional<AuthResponse> registrationResponse = service.register(authRequest);
+        Optional<AuthResponse> registration = service.register(request);
 
         String wrongPassword = "abc123";
-        AuthRequest badAuthRequest = new AuthRequest(username, wrongPassword);
-        Optional<AuthResponse> authenticatedResponse = service.authenticate(badAuthRequest);
+        AuthRequest badRequest = AuthRequest.withoutToken(username, wrongPassword);
+        Optional<AuthResponse> authentication = service.authenticate(badRequest);
 
         assertAll(
-                () -> assertTrue("Could not mock user", registrationResponse.isPresent()),
-                () -> assertTrue("Failed to authenticate user", authenticatedResponse.isEmpty())
+                () -> assertTrue("Could not mock user", registration.isPresent()),
+                () -> assertTrue("Failed to authenticate user", authentication.isEmpty())
         );
     }
 
@@ -110,16 +114,22 @@ public class AuthServiceTest {
     public void update_returnAuthResponse_ifAuthenticatedAndUserExists() {
         String username = "sam";
         String password = "password123";
-        AuthRequest authRequest = new AuthRequest(username, password);
+        AuthRequest request = AuthRequest.withoutToken(username, password);
 
-        Optional<AuthResponse> registrationResponse = service.register(authRequest);
+        Optional<AuthResponse> registration = service.register(request);
+
+        Optional<User> user = userRepository.fetchByUsername(username);
+        Assertions.assertTrue(user.isPresent());
+
+        String token = tokenService.generateToken(new User(user.get().id(), user.get().username(), user.get().passwordHash()));
+        AuthRequest requestWithToken = AuthRequest.withToken(username, token);
 
         String newPassword = "newPassword321";
-        Optional<AuthResponse> updatedResponse = service.update(authRequest, newPassword);
+        Optional<AuthResponse> updated = service.update(requestWithToken, newPassword);
 
         assertAll(
-                () -> assertTrue("Could not mock user", registrationResponse.isPresent()),
-                () -> assertTrue("Failed to update user information", updatedResponse.isPresent())
+                () -> assertTrue("Could not mock user", registration.isPresent()),
+                () -> assertTrue("Failed to update user information", updated.isPresent())
         );
     }
 
@@ -127,18 +137,24 @@ public class AuthServiceTest {
     public void update_returnAuthResponseWithUpdatedPassword() {
         String username = "sam";
         String password = "password123";
-        AuthRequest authRequest = new AuthRequest(username, password);
+        AuthRequest request = AuthRequest.withoutToken(username, password);
 
-        Optional<AuthResponse> registrationResponse = service.register(authRequest);
+        Optional<AuthResponse> registration = service.register(request);
+
+        Optional<User> user = userRepository.fetchByUsername(username);
+        Assertions.assertTrue(user.isPresent());
+
+        String token = tokenService.generateToken(new User(user.get().id(), user.get().username(), user.get().passwordHash()));
+        AuthRequest requestWithToken = AuthRequest.withToken(username, token);
 
         String newPassword = "newPassword321";
-        Optional<AuthResponse> updatedResponse = service.update(authRequest, newPassword);
+        Optional<AuthResponse> updated = service.update(requestWithToken, newPassword);
 
         Optional<User> updatedUser = repository.fetchByUsername(username);
 
         assertAll(
-                () -> assertTrue("Could not mock user", registrationResponse.isPresent()),
-                () -> assertTrue("Failed to update user information", updatedResponse.isPresent()),
+                () -> assertTrue("Could not mock user", registration.isPresent()),
+                () -> assertTrue("Failed to update user information", updated.isPresent()),
                 () -> assertTrue("User not found after updating", updatedUser.isPresent()),
                 () -> assertTrue("Passwords do not match after update",
                         passwordHasher.verify(newPassword, updatedUser.get().passwordHash()))
@@ -149,13 +165,19 @@ public class AuthServiceTest {
     public void delete_returnTrue_ifUserExists() {
         String username = "sam";
         String password = "password123";
-        AuthRequest authRequest = new AuthRequest(username, password);
+        AuthRequest request = AuthRequest.withoutToken(username, password);
 
-        Optional<AuthResponse> registrationResponse = service.register(authRequest);
+        Optional<AuthResponse> registration = service.register(request);
+
+        Optional<User> user = userRepository.fetchByUsername(username);
+        Assertions.assertTrue(user.isPresent());
+
+        String token = tokenService.generateToken(new User(user.get().id(), user.get().username(), user.get().passwordHash()));
+        AuthRequest requestWithToken = AuthRequest.withToken(username, token);
 
         assertAll(
-                () -> assertTrue("Could not mock user", registrationResponse.isPresent()),
-                () -> assertTrue("Failed to delete user", service.delete(authRequest))
+                () -> assertTrue("Could not mock user", registration.isPresent()),
+                () -> assertTrue("Failed to delete user", service.delete(requestWithToken))
         );
     }
 
@@ -163,8 +185,26 @@ public class AuthServiceTest {
     public void delete_returnFalse_ifUserDoesNotExist() {
         String username = "sam";
         String password = "password123";
-        AuthRequest authRequest = new AuthRequest(username, password);
+        String token = tokenService.generateToken(new User(1, username, password));
+        AuthRequest request = AuthRequest.withToken(username, token);
 
-        assertFalse("User targeted for deletion still exists", service.delete(authRequest));
+        assertFalse("User targeted for deletion still exists", service.delete(request));
+    }
+
+    @Test
+    public void authenticate_returnAuthResponseWithToken_ifValidCredentials() {
+        String username = "sam";
+        String password = "password123";
+        AuthRequest request = AuthRequest.withoutToken(username, password);
+
+        Optional<AuthResponse> registration = service.register(request);
+
+        Optional<AuthResponse> authentication = service.authenticate(request);
+
+        assertAll(
+                () -> assertTrue("Could not mock user", registration.isPresent()),
+                () -> assertTrue("Failed to authenticate user", authentication.isPresent()),
+                () -> assertNotNull(authentication.get().token(), "Token should not be null")
+        );
     }
 }
