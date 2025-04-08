@@ -1,6 +1,7 @@
 package javaloginmodule.repository;
 
 import javaloginmodule.model.User;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -8,6 +9,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 
+import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
@@ -98,7 +101,7 @@ public class UserRepositoryTest {
         Optional<User> user = repository.fetchByUsername("sam");
 
         assertAll(
-                () -> assertTrue("Failed to delete user", repository.delete(user.get())),
+                () -> assertTrue("Failed to delete user", repository.delete(user.get().id())),
                 () -> assertTrue("User targeted for deletion still exists", repository.fetchByUsername("sam").isEmpty())
         );
     }
@@ -109,7 +112,7 @@ public class UserRepositoryTest {
 
         assertAll(
                 () -> assertTrue("Sanity check failed: user should not exist", repository.fetchByUsername("peter").isEmpty()),
-                () -> assertFalse("Expected delete to fail for non-existing user", repository.delete(user))
+                () -> assertFalse("Expected delete to fail for non-existing user", repository.delete(user.id()))
         );
     }
 
@@ -125,5 +128,23 @@ public class UserRepositoryTest {
         User user = new User(0, "charlie", null);
         Optional<User> savedUser = repository.save(user);
         assertTrue("Expected save to fail when password is null", savedUser.isEmpty());
+    }
+
+    @Test
+    public void getUserCreationTimestamp_returnsTimestamp_ifIdExists() {
+        User user = new User(0, "peter", "hashCake");
+        Optional<User> savedUser = repository.save(user);
+        Assertions.assertTrue(savedUser.isPresent());
+
+        Optional<LocalDateTime> timestamp = repository.getUserCreationTimestamp(savedUser.get().id());
+
+        assertAll(
+                () -> assertTrue("Expected timestamp to exist", timestamp.isPresent()),
+                () -> {
+                    LocalDateTime now = LocalDateTime.now();
+                    Duration diff = Duration.between(timestamp.get(), now);
+                    assertTrue("Timestamp is too far off current time", Math.abs(diff.toMillis()) < 100);
+                }
+        );
     }
 }

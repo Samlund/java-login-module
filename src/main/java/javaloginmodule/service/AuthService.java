@@ -1,9 +1,7 @@
 package javaloginmodule.service;
 
-import javaloginmodule.model.AuthResponse;
-import javaloginmodule.model.User;
+import javaloginmodule.model.*;
 import javaloginmodule.security.PasswordHasher;
-import javaloginmodule.model.AuthRequest;
 import javaloginmodule.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -23,51 +21,52 @@ public class AuthService {
         this.tokenService = tokenService;
     }
 
-    public Optional<AuthResponse> register(AuthRequest authRequest) {
-        String hashedPassword = passwordHasher.hash(authRequest.password());
-        User candidateUser = new User(0, authRequest.username(), hashedPassword);
-        Optional<User> createdUser = userRepository.save(candidateUser);
-        return createdUser.map(user -> AuthResponse.withoutToken(createdUser.get()));
+    public Optional<UserDetailsResponse> register(UserRequest request) {
+        String hashedPassword = passwordHasher.hash(request.password());
+        User candidateUser = new User(0, request.username(), hashedPassword);
+        Optional<User> savedUser = userRepository.save(candidateUser);
+        return savedUser.flatMap(user -> userRepository.getUserCreationTimestamp(user.id())
+                        .map(createdAt -> new UserDetailsResponse(user.id(), user.username(), createdAt)));
     }
 
-    public Optional<AuthResponse> authenticate(AuthRequest authRequest) {
-        Optional<User> targetUser = validateUserCredentials(authRequest);
+    public Optional<AuthResponse> authenticate(UserRequest request) {
+        Optional<User> targetUser = validateUserCredentials(request);
         return targetUser.map(user -> {
-            String token = tokenService.generateToken(targetUser.get());
-            return AuthResponse.withToken(targetUser.get(), token);
+            Token token = new Token(tokenService.generateToken(user));
+            UserResponse userResponse = new UserResponse(user.id(), user.username());
+            return new AuthResponse(userResponse, token);
         });
     }
 
-    public Optional<AuthResponse> update(AuthRequest authRequest, String newPassword) {
-        return tokenService.verifyToken(authRequest.token())
-                .flatMap(subject -> parseUserId(subject))
+    public Optional<AuthResponse> updatePassword(Token token, String newPassword) {
+        Optional<String> subject = tokenService.verifyToken(token.value());
+        return subject.flatMap(extractedId -> parseUserId(extractedId))
                 .flatMap(userId -> userRepository.fetchById(userId))
                 .map(user -> new User(user.id(), user.username(), passwordHasher.hash(newPassword)))
                 .flatMap(userToUpdate -> userRepository.update(userToUpdate))
                 .map(updatedUser -> {
-                    String token = tokenService.generateToken(updatedUser);
-                    return AuthResponse.withToken(updatedUser, token);
+                    Token newToken = new Token(tokenService.generateToken(updatedUser));
+                    UserResponse userResponse = new UserResponse(updatedUser.id(), updatedUser.username());
+                    return new AuthResponse(userResponse, newToken);
                 });
     }
 
-    private Optional<User> validateUserCredentials(AuthRequest authRequest) {
-        Optional<User> user = userRepository.fetchByUsername(authRequest.username());
+    private Optional<User> validateUserCredentials(UserRequest request) {
+        Optional<User> user = userRepository.fetchByUsername(request.username());
         if (user.isEmpty()) {
             return Optional.empty();
         }
         User targetUser = user.get();
-        if (passwordHasher.verify(authRequest.password(), targetUser.passwordHash())) {
+        if (passwordHasher.verify(request.password(), targetUser.passwordHash())) {
             return Optional.of(targetUser);
         }
         return Optional.empty();
     }
 
-    public boolean delete(AuthRequest authRequest) {
-        return tokenService.verifyToken(authRequest.token())
-                .flatMap(subject -> parseUserId(subject))
-                .flatMap(userId -> userRepository.fetchById(userId))
-                .map(user -> new User(user.id(), user.username(), user.passwordHash()))
-                .map(userToDelete -> userRepository.delete(userToDelete))
+    public boolean delete(Token token) {
+        Optional<String> subject = tokenService.verifyToken(token.value());
+        return subject.flatMap(extractedId -> parseUserId(extractedId))
+                .map(userId -> userRepository.delete(userId))
                 .orElse(false);
     }
 

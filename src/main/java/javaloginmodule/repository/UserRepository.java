@@ -9,6 +9,9 @@ import org.springframework.jdbc.support.KeyHolder;
 import org.springframework.stereotype.Repository;
 
 import java.sql.PreparedStatement;
+import java.sql.Timestamp;
+import java.time.LocalDateTime;
+import java.util.Map;
 import java.util.Optional;
 
 @Repository
@@ -31,7 +34,9 @@ public class UserRepository {
                 return ps;
             }, keyHolder);
 
-            int id = keyHolder.getKey().intValue();
+            Map<String, Object> keys = keyHolder.getKeys();
+            int id = ((Number) keys.get("ID")).intValue();
+
             return Optional.of(new User(id, user.username(), user.passwordHash()));
         } catch (DataAccessException e) {
             return Optional.empty();
@@ -59,12 +64,12 @@ public class UserRepository {
         }
     }
 
-    public boolean delete(User user) {
+    public boolean delete(int id) {
         String sql = "DELETE FROM users WHERE id = ?";
         try {
             int rowsAffected = jdbcTemplate.update(connection -> {
                 PreparedStatement ps = connection.prepareStatement(sql);
-                ps.setInt(1, user.id());
+                ps.setInt(1, id);
                 return ps;
             });
 
@@ -105,6 +110,16 @@ public class UserRepository {
                     id
             );
             return Optional.of(user);
+        } catch (EmptyResultDataAccessException e) {
+            return Optional.empty();
+        }
+    }
+
+    public Optional<LocalDateTime> getUserCreationTimestamp(int id) {
+        String sql = "SELECT created_at FROM users WHERE id = ?";
+        try {
+            Timestamp timestamp = jdbcTemplate.queryForObject(sql, Timestamp.class, id);
+            return Optional.of(timestamp.toLocalDateTime());
         } catch (EmptyResultDataAccessException e) {
             return Optional.empty();
         }
