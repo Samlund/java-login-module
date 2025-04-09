@@ -1,4 +1,4 @@
-package javaloginmodule.service;
+package javaloginmodule.security;
 
 import javaloginmodule.model.User;
 

@@ -1,6 +1,5 @@
 package javaloginmodule.controller;
 
-import javaloginmodule.model.AuthResponse;
 import javaloginmodule.model.UserDetailsResponse;
 import javaloginmodule.model.UserRequest;
 import javaloginmodule.service.AuthService;
@@ -9,8 +8,6 @@ import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-
-import java.util.Optional;
 
 @Controller
 @RequestMapping("api/auth")
@@ -24,11 +21,8 @@ public class AuthController {
 
     @PostMapping("/register")
     public ResponseEntity<UserDetailsResponse> register(@RequestBody UserRequest request) {
-        Optional<UserDetailsResponse> response = authService.register(request);
+        UserDetailsResponse response = authService.register(request);
 
-        if (response.isPresent()) {
-            return ResponseEntity.of(response);
-        }
         return null;
     }
 }

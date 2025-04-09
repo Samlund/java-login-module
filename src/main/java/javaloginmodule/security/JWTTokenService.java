@@ -1,4 +1,4 @@
-package javaloginmodule.service;
+package javaloginmodule.security;
 
 import com.auth0.jwt.JWT;
 import com.auth0.jwt.JWTVerifier;
@@ -9,6 +9,9 @@ import javaloginmodule.model.User;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.Date;
 import java.util.Optional;
 
 @Component
@@ -28,6 +31,7 @@ public class JWTTokenService implements TokenService {
                 .withSubject(String.valueOf(user.id()))
                 .withClaim("username", user.username())
                 .withIssuer("login-app")
+                .withExpiresAt(Date.from(Instant.now().plus(15, ChronoUnit.MINUTES)))
                 .sign(algorithm);
     }
 
@@ -38,6 +42,7 @@ public class JWTTokenService implements TokenService {
 
             JWTVerifier verifier = JWT.require(algorithm)
                     .withIssuer("login-app")
+                    .acceptExpiresAt(1)
                     .build();
 
             DecodedJWT decoded = verifier.verify(token);

@@ -1,6 +1,7 @@
 package javaloginmodule.service;
 
 import javaloginmodule.model.User;
+import javaloginmodule.security.TokenService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;

@@ -1,7 +1,10 @@
 package javaloginmodule.repository;
 
+import javaloginmodule.exceptions.UserAlreadyExistsException;
+import javaloginmodule.exceptions.UserNotFoundException;
 import javaloginmodule.model.User;
 import org.springframework.dao.DataAccessException;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
@@ -22,7 +25,7 @@ public class UserRepository {
         this.jdbcTemplate = jdbcTemplate;
     }
 
-    public Optional<User> save(User user) {
+    public User save(User user) {
         String sql = "INSERT INTO users (username, password) VALUES (?,?)";
         KeyHolder keyHolder = new GeneratedKeyHolder();
 
@@ -37,52 +40,46 @@ public class UserRepository {
             Map<String, Object> keys = keyHolder.getKeys();
             int id = ((Number) keys.get("ID")).intValue();
 
-            return Optional.of(new User(id, user.username(), user.passwordHash()));
-        } catch (DataAccessException e) {
-            return Optional.empty();
+            return new User(id, user.username(), user.passwordHash());
+        } catch (DuplicateKeyException e) {
+            throw new UserAlreadyExistsException(user.username());
         }
     }
 
-    public Optional<User> update(User user) {
+    public User update(User user) {
         String sql = "UPDATE users SET password = ? WHERE username = ?";
 
-        try {
-            int rowsAffected = jdbcTemplate.update(connection -> {
-                PreparedStatement ps = connection.prepareStatement(sql);
-                ps.setString(1, user.passwordHash());
-                ps.setString(2, user.username());
-                return ps;
-            });
+        int rowsAffected = jdbcTemplate.update(connection -> {
+            PreparedStatement ps = connection.prepareStatement(sql);
+            ps.setString(1, user.passwordHash());
+            ps.setString(2, user.username());
+            return ps;
+        });
 
-            if (rowsAffected == 0) {
-                return Optional.empty();
-            }
-
-            return Optional.of(user);
-        } catch (DataAccessException e) {
-            return Optional.empty();
+        if (rowsAffected == 0) {
+            throw new UserNotFoundException(user.username());
         }
+
+        return fetchByUsername(user.username());
     }
 
-    public boolean delete(int id) {
+    public void delete(int id) {
         String sql = "DELETE FROM users WHERE id = ?";
-        try {
-            int rowsAffected = jdbcTemplate.update(connection -> {
-                PreparedStatement ps = connection.prepareStatement(sql);
-                ps.setInt(1, id);
-                return ps;
-            });
+        int rowsAffected = jdbcTemplate.update(connection -> {
+            PreparedStatement ps = connection.prepareStatement(sql);
+            ps.setInt(1, id);
+            return ps;
+        });
 
-            return rowsAffected != 0;
-        } catch (DataAccessException e) {
-            return false;
+        if (rowsAffected == 0) {
+            throw new UserNotFoundException(id);
         }
     }
 
-    public Optional<User> fetchByUsername(String username) {
+    public User fetchByUsername(String username) {
         String sql = "SELECT * FROM users WHERE username = ?";
         try {
-            User user = jdbcTemplate.queryForObject(
+            return jdbcTemplate.queryForObject(
                     sql,
                     (rs, rowNum) -> new User(
                             rs.getInt("id"),
@@ -91,9 +88,8 @@ public class UserRepository {
                     ),
                     username
             );
-            return Optional.of(user);
         } catch (EmptyResultDataAccessException e) {
-            return Optional.empty();
+            throw new UserNotFoundException(username);
         }
     }
 

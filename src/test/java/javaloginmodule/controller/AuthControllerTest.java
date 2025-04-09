@@ -15,7 +15,6 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 
 import java.time.LocalDateTime;
-import java.util.Optional;
 
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -34,7 +33,7 @@ public class AuthControllerTest {
         UserRequest request = new UserRequest("sam", "Password123");
         UserDetailsResponse mockResponse = new UserDetailsResponse(1, "sam", LocalDateTime.now());
 
-        Mockito.when(authService.register(Mockito.any(UserRequest.class))).thenReturn(Optional.of(mockResponse));
+        Mockito.when(authService.register(Mockito.any(UserRequest.class))).thenReturn(mockResponse);
 
         mockMvc.perform(MockMvcRequestBuilders.post("/api/auth/register")
                 .contentType(MediaType.APPLICATION_JSON)

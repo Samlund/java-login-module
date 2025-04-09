@@ -1,5 +1,7 @@
 package javaloginmodule.repository;
 
+import javaloginmodule.exceptions.UserAlreadyExistsException;
+import javaloginmodule.exceptions.UserNotFoundException;
 import javaloginmodule.model.User;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -13,10 +15,8 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Optional;
 
-import static org.junit.jupiter.api.Assertions.assertAll;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.springframework.test.util.AssertionErrors.assertFalse;
-import static org.springframework.test.util.AssertionErrors.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
+//import static org.springframework.test.util.AssertionErrors.*;
 
 @ActiveProfiles("test")
 @SpringBootTest
@@ -34,18 +34,14 @@ public class UserRepositoryTest {
     @Test
     public void fetchByUsername_returnsUser_ifUserExists() {
         String username = "sam";
-        Optional<User> user = repository.fetchByUsername(username);
-        assertAll(
-                () -> assertTrue("User not found for username: " + username, user.isPresent()),
-                () -> assertEquals("sam", user.get().username())
-        );
+        User user = repository.fetchByUsername(username);
+        assertEquals("sam", user.username());
     }
 
     @Test
-    public void fetchByUsername_returnsEmpty_ifUserDoesNotExist() {
+    public void fetchByUsername_throwsUserNotFoundException_ifUserDoesNotExist() {
         String username = "pedro";
-        Optional<User> user = repository.fetchByUsername(username);
-        assertTrue("Expected empty Optional for non existing user", user.isEmpty());
+        assertThrows(UserNotFoundException.class, () -> repository.fetchByUsername(username));
     }
 
     @Test
@@ -53,97 +49,87 @@ public class UserRepositoryTest {
         String username = "alex";
         User user = new User(0, username, "hashed321");
 
-        Optional<User> savedUser = repository.save(user);
+        User savedUser = repository.save(user);
 
         assertAll(
-                () -> assertTrue("Failed to create user", savedUser.isPresent()),
-                () -> assertEquals(username, savedUser.get().username()),
-                () -> assertEquals("hashed321", savedUser.get().passwordHash())
+                () -> assertEquals(username, savedUser.username()),
+                () -> assertEquals("hashed321", savedUser.passwordHash())
         );
     }
 
     @Test
-    public void save_returnsEmpty_ifUserAlreadyExist() {
+    public void save_throwsUserAlreadyExistsException_ifUserAlreadyExist() {
         String username = "sam";
         User user = new User(0, username, "hashBrown");
-
-        Optional<User> savedUser = repository.save(user);
-
-        assertTrue("Expected save to fail for existing user", savedUser.isEmpty());
+        assertThrows(UserAlreadyExistsException.class, () -> repository.save(user));
     }
 
     @Test
     public void update_returnsUser_ifUserExists() {
-        Optional<User> user = repository.fetchByUsername("sam");
+        User user = repository.fetchByUsername("sam");
         String newPassword = "newHash789";
-        User userToUpdate = new User(user.get().id(), user.get().username(), newPassword);
+        User userToUpdate = new User(user.id(), user.username(), newPassword);
 
-        Optional<User> updatedUser = repository.update(userToUpdate);
+        User updatedUser = repository.update(userToUpdate);
 
-        assertAll(
-                () -> assertTrue("Failed to update password", updatedUser.isPresent()),
-                () -> assertEquals(userToUpdate.passwordHash(), updatedUser.get().passwordHash())
-        );
+        assertEquals(userToUpdate.passwordHash(), updatedUser.passwordHash(), "Expected password to be updated");
     }
 
     @Test
-    public void update_returnsEmpty_ifUserDoesNotExist() {
+    public void update_throwsUserNotFoundException_ifUserDoesNotExist() {
         User user = new User(0, "peter", "hashCake");
-        User userToUpdate = new User(user.id(), user.username(), user.passwordHash());
-
-        Optional<User> updatedUser = repository.update(userToUpdate);
-
-        assertTrue("Expected update to fail for non-existing user", updatedUser.isEmpty());
+        assertThrows(UserNotFoundException.class, () -> repository.update(user));
     }
 
     @Test
-    public void delete_returnsTrue_ifUserExists() {
-        Optional<User> user = repository.fetchByUsername("sam");
+    public void delete_deletesUser_ifUserExists() {
+        String username = "sam";
+        User user = repository.fetchByUsername(username);
+        assertEquals(username, user.username());
 
-        assertAll(
-                () -> assertTrue("Failed to delete user", repository.delete(user.get().id())),
-                () -> assertTrue("User targeted for deletion still exists", repository.fetchByUsername("sam").isEmpty())
-        );
+        repository.delete(user.id());
+
+        assertThrows(UserNotFoundException.class, () -> repository.fetchByUsername(username), "Expected UserNotFoundException after deleting user");
     }
 
     @Test
-    public void delete_returnsFalse_ifUserDoesNotExist() {
+    public void delete_throwsUserNotFoundException_ifUserDoesNotExist() {
         User user = new User(0, "peter", "hashCake");
+        assertThrows(UserNotFoundException.class, () -> repository.delete(user.id()));
+    }
+
+    @Test
+    void fetchById_returnsUser_ifUserExists() {
+        Optional<User> result = repository.fetchById(1);
 
         assertAll(
-                () -> assertTrue("Sanity check failed: user should not exist", repository.fetchByUsername("peter").isEmpty()),
-                () -> assertFalse("Expected delete to fail for non-existing user", repository.delete(user.id()))
+                () -> assertTrue(result.isPresent(), "Expected user to be present"),
+                () -> assertEquals(1, result.get().id()),
+                () -> assertEquals("sam", result.get().username()),
+                () -> assertEquals("hashed123", result.get().passwordHash())
         );
     }
 
     @Test
-    public void save_returnsEmpty_ifUsernameIsNull() {
-        User user = new User(0, null, "hash123");
-        Optional<User> savedUser = repository.save(user);
-        assertTrue("Expected save to fail when username is null", savedUser.isEmpty());
-    }
+    void fetchById_returnsEmpty_ifUserDoesNotExist() {
+        Optional<User> result = repository.fetchById(999);
 
-    @Test
-    public void save_returnsEmpty_ifPasswordIsNull() {
-        User user = new User(0, "charlie", null);
-        Optional<User> savedUser = repository.save(user);
-        assertTrue("Expected save to fail when password is null", savedUser.isEmpty());
+        assertTrue(result.isEmpty(), "Expected Optional to be empty for non-existent user");
     }
 
     @Test
     public void getUserCreationTimestamp_returnsTimestamp_ifIdExists() {
         User user = new User(0, "peter", "hashCake");
-        Optional<User> savedUser = repository.save(user);
-        Assertions.assertTrue(savedUser.isPresent());
+        User savedUser = repository.save(user);
 
-        Optional<LocalDateTime> timestamp = repository.getUserCreationTimestamp(savedUser.get().id());
+        Optional<LocalDateTime> timestamp = repository.getUserCreationTimestamp(savedUser.id());
 
         assertAll(
-                () -> assertTrue("Expected timestamp to exist", timestamp.isPresent()),
+                () -> assertTrue(timestamp.isPresent(), "Expected timestamp to exist"),
                 () -> {
                     LocalDateTime now = LocalDateTime.now();
                     Duration diff = Duration.between(timestamp.get(), now);
-                    assertTrue("Timestamp is too far off current time", Math.abs(diff.toMillis()) < 100);
+                    assertTrue(Math.abs(diff.toMillis()) < 100, "Timestamp is too far off current time");
                 }
         );
     }
