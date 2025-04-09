@@ -53,14 +53,9 @@ public class AuthService {
 
     private Optional<User> validateUserCredentials(UserRequest request) {
         Optional<User> user = userRepository.fetchByUsername(request.username());
-        if (user.isEmpty()) {
-            return Optional.empty();
-        }
-        User targetUser = user.get();
-        if (passwordHasher.verify(request.password(), targetUser.passwordHash())) {
-            return Optional.of(targetUser);
-        }
-        return Optional.empty();
+        return user.flatMap(targetUser -> passwordHasher.verify(request.password(), targetUser.passwordHash())
+                ? Optional.of(targetUser)
+                : Optional.empty());
     }
 
     public boolean delete(Token token) {

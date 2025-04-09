@@ -2,5 +2,5 @@ CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     username TEXT NOT NULL UNIQUE,
     password TEXT NOT NULL,
-    created_at DEFAULT (datetime('now'))
+    created_at TEXT DEFAULT (datetime('now'))
 );
